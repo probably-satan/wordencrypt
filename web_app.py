@@ -4,6 +4,7 @@ from flask import Flask, Response, render_template, request
 from text_obfuscator_html import (
     ObfuscationConfig,
     build_html_document,
+    build_reddit_text,
     css_color_to_rgba,
     guess_font_path_from_family,
     parse_css_size_to_px,
@@ -213,6 +214,35 @@ def download_output():
             "Content-Disposition": f"attachment; filename={filename}",
         },
     )
+
+
+@app.post("/reddit")
+def reddit_output():
+    user_text = request.form.get("input_text", "")
+    form_values = {
+        "zero_prob": request.form.get("zero_prob", "0.22"),
+        "confusable_prob": request.form.get("confusable_prob", "0.05"),
+        "enable_confusables": request.form.get("enable_confusables"),
+        "seed": request.form.get("seed", "42"),
+        # Unused by reddit mode but required by build_config_from_form
+        "font_size": "12pt",
+        "font_family": "Arial, Helvetica, sans-serif",
+        "text_color": "#141414",
+        "image_prob": "0.35",
+        "protection_preset": "balanced",
+        "protection_ensemble": None,
+        "noise_strength": "0.08",
+        "gradient_strength": "0.07",
+        "frequency_strength": "0.06",
+        "texture_strength": "0.07",
+        "baseline_em": "-0.26",
+        "image_height_em": "1.18",
+        "enable_image_protection": None,
+        "include_hidden": None,
+    }
+    config = build_config_from_form(form_values)
+    result = build_reddit_text(user_text, config)
+    return Response(result, mimetype="text/plain; charset=utf-8")
 
 
 if __name__ == "__main__":

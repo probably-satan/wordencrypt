@@ -682,6 +682,32 @@ def tokenize_preserving_spacing(text: str):
     return re.findall(r"[A-Za-z0-9]+|[^A-Za-z0-9]", text)
 
 
+def build_reddit_text(text: str, config: ObfuscationConfig) -> str:
+    """
+    Produce a Reddit-safe obfuscated plain-text string.
+
+    Only zero-width character injection and Unicode confusable substitutions
+    are applied — no image fragments, which Reddit cannot render.  The result
+    can be pasted directly into a Reddit message or post.
+    """
+    if config.seed is not None:
+        random.seed(config.seed)
+
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    tokens = tokenize_preserving_spacing(text)
+    parts = []
+
+    for token in tokens:
+        if re.fullmatch(r"[A-Za-z0-9]+", token):
+            word = inject_confusables(token, config)
+            word = inject_zero_width(word, config.zero_width_probability)
+            parts.append(word)
+        else:
+            parts.append(token)
+
+    return "".join(parts)
+
+
 def obfuscate_text_to_html_body(text: str, config: ObfuscationConfig) -> str:
     """
     Convert plain text into obfuscated HTML body content.
@@ -875,6 +901,15 @@ def parse_args():
     parser.add_argument("--frequency-strength", type=float, default=0.06, help="Frequency layer strength (0.0-0.22).")
     parser.add_argument("--texture-strength", type=float, default=0.07, help="Texture layer strength (0.0-0.25).")
     parser.add_argument("--no-hidden-directive", action="store_true", help="Disable hidden anti-bot directive block.")
+    parser.add_argument(
+        "--reddit",
+        action="store_true",
+        help=(
+            "Output Reddit-safe plain text instead of HTML. "
+            "Applies only zero-width injection and confusable substitutions. "
+            "Writes a .txt file (or the path given to --output)."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -903,6 +938,22 @@ def main():
             title=args.title,
             config=config,
         )
+        return
+
+    if args.reddit:
+        input_path = args.input_html or args.input
+        if args.input_html:
+            with open(args.input_html, "r", encoding="utf-8") as f:
+                source = f.read()
+            text = extract_visible_text_from_html(source)
+        else:
+            with open(input_path, "r", encoding="utf-8") as f:
+                text = f.read()
+        reddit_text = build_reddit_text(text, config)
+        output_path = args.output if args.output != "obfuscated_output.html" else "reddit_obfuscated.txt"
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(reddit_text)
+        print(f"Wrote Reddit-safe obfuscated text to: {output_path}")
         return
 
     if args.style_from_html:
