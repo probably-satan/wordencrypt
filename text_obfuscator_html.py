@@ -661,7 +661,15 @@ def obfuscate_word(word: str, config: ObfuscationConfig) -> str:
             suffix = html.escape(inject_zero_width(suffix, config.zero_width_probability))
 
             # Empty alt avoids exposing raw text to naive scrapers.
-            img_tag = f'<img class="syllable-img" src="{img_uri}" alt="" aria-hidden="true" />'
+            img_tag = (
+                f'<img class="syllable-img" src="{img_uri}" alt="" aria-hidden="true" '
+                f'style="display:inline-block !important; '
+                f'vertical-align:{config.image_vertical_align_em}em !important; '
+                f'height:{config.image_height_em}em !important; '
+                f'width:auto !important; max-width:none !important; '
+                f'margin:0 !important; padding:0 !important; '
+                f'pointer-events:none !important; user-select:none !important;" />'
+            )
             return f"{prefix}{img_tag}{suffix}"
 
     return html.escape(inject_zero_width(transformed_word, config.zero_width_probability))
@@ -678,12 +686,16 @@ def obfuscate_text_to_html_body(text: str, config: ObfuscationConfig) -> str:
     """
     Convert plain text into obfuscated HTML body content.
     """
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
     tokens = tokenize_preserving_spacing(text)
     html_parts = []
 
     for token in tokens:
         if re.fullmatch(r"[A-Za-z0-9]+", token):
             html_parts.append(obfuscate_word(token, config))
+        elif token == "\n":
+            # Keep line breaks when host platforms strip/override stylesheet rules.
+            html_parts.append("<br />\n")
         else:
             html_parts.append(html.escape(token))
 
@@ -738,11 +750,12 @@ def build_html_document(title: str, text: str, config: ObfuscationConfig) -> str
     }}
 
     .syllable-img {{
-      display: inline-block;
-            vertical-align: {config.image_vertical_align_em}em;
-            height: {config.image_height_em}em;
-      width: auto;
-            margin: 0;
+        display: inline-block !important;
+            vertical-align: {config.image_vertical_align_em}em !important;
+            height: {config.image_height_em}em !important;
+        width: auto !important;
+        max-width: none !important;
+            margin: 0 !important;
       padding: 0;
       pointer-events: none;
       user-select: none;
@@ -765,7 +778,7 @@ def build_html_document(title: str, text: str, config: ObfuscationConfig) -> str
 </head>
 <body>
 {hidden_block}
-  <main class=\"content\">{body}</main>
+    <main class="content" style="white-space: pre-wrap; overflow-wrap: anywhere;">{body}</main>
 </body>
 </html>
 """
