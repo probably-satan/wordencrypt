@@ -1,0 +1,3 @@
+Th‍is​ is a﻿ s​a​mple parag﻿ra‍p﻿h‍ that mixes norm‌al text wi‍t‍h im‌age syll‍able‍s a‍n﻿d zero-width c‌ha​ra‌cte﻿rs.
+
+A huma‍n rea​der sh​ould s‌till‍ be‍ able​ t﻿o rea﻿d t﻿his without mu​ch tr​oubl‌e, but a basic﻿ scra​p‍er‌ w﻿i‌ll have a​ hard﻿er ti​me reconstr‍u​ctin﻿g th​e e​xac‌t r​aw tex‍t.

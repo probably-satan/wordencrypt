@@ -366,6 +366,17 @@
           </div>
         </form>
 
+        <form method="post" action="/reddit" id="redditForm" style="margin-top: 10px;">
+          <input type="hidden" name="input_text" id="reddit_input_text" />
+          <input type="hidden" name="zero_prob" id="reddit_zero_prob" />
+          <input type="hidden" name="confusable_prob" id="reddit_confusable_prob" />
+          <input type="hidden" name="enable_confusables" id="reddit_enable_confusables" />
+          <input type="hidden" name="seed" id="reddit_seed" />
+          <div class="actions">
+            <button class="ghost" type="button" onclick="generateReddit()">Generate Reddit Text</button>
+          </div>
+        </form>
+
         {% if debug_info %}
           <div class="status">{{ debug_info }}</div>
         {% endif %}
@@ -389,6 +400,18 @@
         {% else %}
           <p style="color: var(--ink-soft); margin-top: 0;">Your generated HTML will appear here.</p>
         {% endif %}
+
+        <div id="redditOutputSection" style="display:none; margin-top: 18px;">
+          <h2 style="font-size: 1.05rem; color: #2e241c; margin: 0 0 8px;">Reddit / Plain-Text Output</h2>
+          <p style="font-size: 0.88rem; color: var(--ink-soft); margin: 0 0 8px;">
+            Zero-width characters and Unicode lookalikes only — safe to paste into Reddit messages, posts, or DMs.
+          </p>
+          <div class="actions" style="margin-bottom: 10px;">
+            <button class="ghost" type="button" onclick="copyRedditOutput()">Copy Text</button>
+            <button class="ghost" type="button" onclick="downloadRedditOutput()">Download .txt</button>
+          </div>
+          <textarea id="redditOutput" class="output" readonly style="min-height: 160px;"></textarea>
+        </div>
       </section>
     </div>
   </main>
@@ -489,6 +512,65 @@
         return;
       }
       await navigator.clipboard.writeText(el.value);
+    }
+
+    async function generateReddit() {
+      const inputText = document.getElementById("input_text");
+      const zeroProb = document.getElementById("zero_prob");
+      const confusableProb = document.getElementById("confusable_prob");
+      const enableConfusables = document.querySelector("input[name='enable_confusables']");
+      const seed = document.getElementById("seed");
+
+      document.getElementById("reddit_input_text").value = inputText ? inputText.value : "";
+      document.getElementById("reddit_zero_prob").value = zeroProb ? zeroProb.value : "0.22";
+      document.getElementById("reddit_confusable_prob").value = confusableProb ? confusableProb.value : "0.05";
+      document.getElementById("reddit_enable_confusables").value = (enableConfusables && enableConfusables.checked) ? "on" : "";
+      document.getElementById("reddit_seed").value = seed ? seed.value : "42";
+
+      const form = document.getElementById("redditForm");
+      const formData = new FormData(form);
+
+      try {
+        const response = await fetch("/reddit", { method: "POST", body: formData });
+        if (!response.ok) {
+          const errText = await response.text();
+          alert("Server error generating Reddit text: " + errText);
+          return;
+        }
+        const text = await response.text();
+        const outputEl = document.getElementById("redditOutput");
+        if (outputEl) {
+          outputEl.value = text;
+        }
+        const section = document.getElementById("redditOutputSection");
+        if (section) {
+          section.style.display = "block";
+        }
+      } catch (err) {
+        alert("Failed to generate Reddit text: " + err);
+      }
+    }
+
+    async function copyRedditOutput() {
+      const el = document.getElementById("redditOutput");
+      if (!el) {
+        return;
+      }
+      await navigator.clipboard.writeText(el.value);
+    }
+
+    function downloadRedditOutput() {
+      const el = document.getElementById("redditOutput");
+      if (!el || !el.value) {
+        return;
+      }
+      const blob = new Blob([el.value], { type: "text/plain; charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "reddit_obfuscated.txt";
+      a.click();
+      URL.revokeObjectURL(url);
     }
   </script>
 </body>
