@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local generated outputs
+obfuscated_output*.html
+ocr_test_*.html
+
+# OS/editor files
+.DS_Store
+Thumbs.db

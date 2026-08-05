@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Text Obfuscator Studio</title>
+  <style>
+    :root {
+      --bg: #f4efe8;
+      --ink: #1f1812;
+      --ink-soft: #5d4d40;
+      --brand: #0f7c6b;
+      --brand-dark: #0a5d51;
+      --panel: #fffdf8;
+      --line: #d9cdbf;
+      --accent: #c94f2d;
+      --shadow: 0 16px 40px rgba(63, 41, 26, 0.15);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(1000px 500px at -10% -20%, #ffd8ae 0%, transparent 55%),
+        radial-gradient(1000px 500px at 110% 0%, #a3e0d2 0%, transparent 58%),
+        var(--bg);
+      font-family: "Avenir Next", "Segoe UI", sans-serif;
+      min-height: 100vh;
+    }
+
+    .wrap {
+      max-width: 1160px;
+      margin: 32px auto;
+      padding: 0 18px 40px;
+    }
+
+    .hero {
+      margin-bottom: 18px;
+      padding: 18px 22px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(255, 253, 248, 0.85);
+      box-shadow: var(--shadow);
+      animation: rise 420ms ease-out;
+    }
+
+    .hero h1 {
+      margin: 0;
+      letter-spacing: 0.5px;
+      font-family: "Trebuchet MS", "Avenir Next", sans-serif;
+      font-size: clamp(1.4rem, 2vw, 2rem);
+    }
+
+    .hero p {
+      margin: 10px 0 0;
+      color: var(--ink-soft);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      padding: 16px;
+      animation: rise 520ms ease-out;
+    }
+
+    .card h2 {
+      margin: 0 0 12px;
+      font-size: 1.05rem;
+      color: #2e241c;
+    }
+
+    .rows {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    label {
+      display: block;
+      font-size: 0.83rem;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      color: var(--ink-soft);
+      margin-bottom: 4px;
+    }
+
+    input[type="text"], input[type="number"], textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      border-radius: 10px;
+      padding: 10px 11px;
+      font-size: 0.96rem;
+      outline: none;
+      transition: border-color 180ms ease;
+    }
+
+    select {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      border-radius: 10px;
+      padding: 10px 11px;
+      font-size: 0.96rem;
+      outline: none;
+      transition: border-color 180ms ease;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--brand);
+    }
+
+    input:focus, textarea:focus {
+      border-color: var(--brand);
+    }
+
+    textarea {
+      min-height: 210px;
+      resize: vertical;
+      line-height: 1.5;
+    }
+
+    .check {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 10px;
+      color: var(--ink-soft);
+      font-size: 0.9rem;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 14px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 11px 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 140ms ease, background-color 140ms ease;
+    }
+
+    .primary {
+      background: var(--brand);
+      color: #fff;
+    }
+
+    .primary:hover { background: var(--brand-dark); transform: translateY(-1px); }
+
+    .ghost {
+      background: #f9f4ed;
+      color: #3a2e24;
+      border: 1px solid var(--line);
+    }
+
+    .ghost:hover { background: #f2e8db; }
+
+    .status {
+      margin-top: 12px;
+      border-left: 4px solid var(--accent);
+      padding: 8px 10px;
+      background: #fff4ef;
+      color: #5a2c1e;
+      font-size: 0.88rem;
+      border-radius: 8px;
+    }
+
+    .range-meta {
+      display: flex;
+      justify-content: space-between;
+      color: var(--ink-soft);
+      font-size: 0.83rem;
+      margin-top: 4px;
+    }
+
+    .output {
+      min-height: 210px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      overflow: auto;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.82rem;
+      white-space: pre;
+    }
+
+    iframe {
+      width: 100%;
+      min-height: 240px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      margin-top: 12px;
+    }
+
+    .stagger {
+      animation: rise 450ms ease-out;
+      animation-fill-mode: both;
+    }
+
+    .stagger.s1 { animation-delay: 50ms; }
+    .stagger.s2 { animation-delay: 130ms; }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: 1fr; }
+      .rows { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="hero">
+      <h1>Text Obfuscator Studio</h1>
+      <p>Paste text, tune the typography, and generate scraper-annoying HTML output.</p>
+    </section>
+
+    <div class="grid">
+      <section class="card stagger s1">
+        <h2>Input</h2>
+        <form method="post">
+          <div class="rows">
+            <div>
+              <label for="title">Document title</label>
+              <input id="title" name="title" type="text" value="{{ values.title }}" />
+            </div>
+            <div>
+              <label for="font_size">Font size (example: 12pt)</label>
+              <input id="font_size" name="font_size" type="text" value="{{ values.font_size }}" />
+            </div>
+            <div>
+              <label for="font_family">Font family</label>
+              <input id="font_family" name="font_family" type="text" value="{{ values.font_family }}" />
+            </div>
+            <div>
+              <label for="text_color">Text color</label>
+              <input id="text_color" name="text_color" type="text" value="{{ values.text_color }}" />
+            </div>
+            <div>
+              <label for="image_prob">Image chunk probability</label>
+              <input id="image_prob" name="image_prob" type="text" value="{{ values.image_prob }}" />
+            </div>
+            <div>
+              <label for="zero_prob">Zero-width probability</label>
+              <input id="zero_prob" name="zero_prob" type="text" value="{{ values.zero_prob }}" />
+            </div>
+            <div>
+              <label for="confusable_prob">Confusable probability</label>
+              <input id="confusable_prob" name="confusable_prob" type="text" value="{{ values.confusable_prob }}" />
+            </div>
+            <div>
+              <label for="protection_preset">Protection preset</label>
+              <select id="protection_preset" name="protection_preset" onchange="applyProtectionPreset(this.value)">
+                <option value="readable" {% if values.protection_preset == 'readable' %}selected{% endif %}>Readable</option>
+                <option value="balanced" {% if values.protection_preset == 'balanced' %}selected{% endif %}>Balanced</option>
+                <option value="aggressive" {% if values.protection_preset == 'aggressive' %}selected{% endif %}>Aggressive</option>
+                <option value="custom" {% if values.protection_preset == 'custom' %}selected{% endif %}>Custom</option>
+              </select>
+            </div>
+            <div>
+              <label for="noise_strength">Noise strength</label>
+              <input id="noise_strength" name="noise_strength" type="text" value="{{ values.noise_strength }}" />
+            </div>
+            <div>
+              <label for="gradient_strength">Gradient strength</label>
+              <input id="gradient_strength" name="gradient_strength" type="text" value="{{ values.gradient_strength }}" />
+            </div>
+            <div>
+              <label for="frequency_strength">Frequency strength</label>
+              <input id="frequency_strength" name="frequency_strength" type="text" value="{{ values.frequency_strength }}" />
+            </div>
+            <div>
+              <label for="texture_strength">Texture strength</label>
+              <input id="texture_strength" name="texture_strength" type="text" value="{{ values.texture_strength }}" />
+            </div>
+            <div>
+              <label for="baseline_em">Image baseline offset</label>
+              <input
+                id="baseline_em"
+                name="baseline_em"
+                type="range"
+                min="-0.60"
+                max="0.40"
+                step="0.01"
+                value="{{ values.baseline_em }}"
+                oninput="syncBaselineLabel(this.value)"
+              />
+              <div class="range-meta">
+                <span>Raise image</span>
+                <strong id="baselineLabel">{{ values.baseline_em }}em</strong>
+                <span>Lower image</span>
+              </div>
+            </div>
+            <div>
+              <label for="image_height_em">Image size</label>
+              <input
+                id="image_height_em"
+                name="image_height_em"
+                type="range"
+                min="0.60"
+                max="1.60"
+                step="0.01"
+                value="{{ values.image_height_em }}"
+                oninput="syncSizeLabel(this.value)"
+              />
+              <div class="range-meta">
+                <span>Smaller</span>
+                <strong id="sizeLabel">{{ values.image_height_em }}em</strong>
+                <span>Larger</span>
+              </div>
+            </div>
+            <div>
+              <label for="seed">Seed (blank = random each run)</label>
+              <input id="seed" name="seed" type="text" value="{{ values.seed }}" />
+            </div>
+          </div>
+
+          <label for="input_text" style="margin-top: 12px;">Input text</label>
+          <textarea id="input_text" name="input_text">{{ values.input_text }}</textarea>
+
+          <label class="check">
+            <input type="checkbox" name="include_hidden" {% if values.include_hidden %}checked{% endif %} />
+            Include hidden machine directive
+          </label>
+
+          <label class="check">
+            <input type="checkbox" name="enable_confusables" {% if values.enable_confusables %}checked{% endif %} />
+            Enable Cyrillic/Unicode lookalike substitutions
+          </label>
+
+          <label class="check">
+            <input type="checkbox" name="enable_image_protection" {% if values.enable_image_protection %}checked{% endif %} />
+            Enable image protection layers (noise, gradient, frequency, texture)
+          </label>
+
+          <label class="check">
+            <input type="checkbox" name="protection_ensemble" {% if values.protection_ensemble %}checked{% endif %} />
+            Ensemble mode (randomly stack a subset per image fragment)
+          </label>
+
+          <div class="actions">
+            <button class="primary" type="submit">Generate Obfuscated HTML</button>
+          </div>
+        </form>
+
+        {% if debug_info %}
+          <div class="status">{{ debug_info }}</div>
+        {% endif %}
+      </section>
+
+      <section class="card stagger s2">
+        <h2>Output</h2>
+
+        {% if result_html %}
+          <div class="actions" style="margin-bottom: 10px;">
+            <button class="ghost" type="button" onclick="copyOutput()">Copy HTML</button>
+            <form method="post" action="/download" style="display: inline;">
+              <input type="hidden" name="title" value="{{ values.title }}" />
+              <textarea name="output_html" style="display:none;">{{ result_html }}</textarea>
+              <button class="ghost" type="submit">Download HTML</button>
+            </form>
+          </div>
+
+          <textarea id="output" class="output" readonly>{{ result_html }}</textarea>
+          <iframe id="previewFrame" srcdoc="{{ result_html|e }}"></iframe>
+        {% else %}
+          <p style="color: var(--ink-soft); margin-top: 0;">Your generated HTML will appear here.</p>
+        {% endif %}
+      </section>
+    </div>
+  </main>
+
+  <script>
+    function updateOutputAndPreview(htmlText) {
+      const output = document.getElementById("output");
+      const frame = document.getElementById("previewFrame");
+      if (output) {
+        output.value = htmlText;
+      }
+      if (frame) {
+        frame.srcdoc = htmlText;
+      }
+    }
+
+    function applyProtectionPreset(presetName) {
+      if (!presetName || presetName === "custom") {
+        return;
+      }
+
+      const presets = {
+        readable: { noise: 0.04, gradient: 0.03, frequency: 0.03, texture: 0.03, ensemble: false },
+        balanced: { noise: 0.08, gradient: 0.07, frequency: 0.06, texture: 0.07, ensemble: true },
+        aggressive: { noise: 0.16, gradient: 0.13, frequency: 0.12, texture: 0.14, ensemble: true },
+      };
+
+      const preset = presets[presetName];
+      if (!preset) {
+        return;
+      }
+
+      const noise = document.getElementById("noise_strength");
+      const gradient = document.getElementById("gradient_strength");
+      const frequency = document.getElementById("frequency_strength");
+      const texture = document.getElementById("texture_strength");
+      const ensemble = document.querySelector("input[name='protection_ensemble']");
+
+      if (noise) noise.value = preset.noise.toFixed(2);
+      if (gradient) gradient.value = preset.gradient.toFixed(2);
+      if (frequency) frequency.value = preset.frequency.toFixed(2);
+      if (texture) texture.value = preset.texture.toFixed(2);
+      if (ensemble) ensemble.checked = preset.ensemble;
+    }
+
+    function applyLiveImageTuning() {
+      const output = document.getElementById("output");
+      if (!output) {
+        return;
+      }
+
+      const baseline = parseFloat(document.getElementById("baseline_em")?.value || "-0.12");
+      const imageSize = parseFloat(document.getElementById("image_height_em")?.value || "1.00");
+      let htmlText = output.value;
+
+      htmlText = htmlText.replace(/vertical-align:\s*[-+]?\d*\.?\d+em;/g, `vertical-align: ${baseline.toFixed(2)}em;`);
+      htmlText = htmlText.replace(/height:\s*[-+]?\d*\.?\d+em;/g, `height: ${imageSize.toFixed(2)}em;`);
+
+      updateOutputAndPreview(htmlText);
+    }
+
+    function syncBaselineLabel(value) {
+      const label = document.getElementById("baselineLabel");
+      if (label) {
+        label.textContent = Number(value).toFixed(2) + "em";
+      }
+      applyLiveImageTuning();
+    }
+
+    function syncSizeLabel(value) {
+      const label = document.getElementById("sizeLabel");
+      if (label) {
+        label.textContent = Number(value).toFixed(2) + "em";
+      }
+      applyLiveImageTuning();
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const slider = document.getElementById("baseline_em");
+      if (slider) {
+        syncBaselineLabel(slider.value);
+      }
+
+      const sizeSlider = document.getElementById("image_height_em");
+      if (sizeSlider) {
+        syncSizeLabel(sizeSlider.value);
+      }
+
+      const preset = document.getElementById("protection_preset");
+      if (preset && preset.value !== "custom") {
+        applyProtectionPreset(preset.value);
+      }
+    });
+
+    async function copyOutput() {
+      const el = document.getElementById("output");
+      if (!el) {
+        return;
+      }
+      await navigator.clipboard.writeText(el.value);
+    }
+  </script>
+</body>
+</html>
