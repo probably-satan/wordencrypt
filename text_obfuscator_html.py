@@ -870,7 +870,7 @@ def parse_args():
         default=None,
         help="Optional HTML file used only to infer font family/size/color for text-file input mode.",
     )
-    parser.add_argument("--output", default="obfuscated_output.html", help="Path to output HTML file.")
+    parser.add_argument("--output", default=None, help="Path to output file. Defaults to 'obfuscated_output.html' (or 'reddit_obfuscated.txt' in --reddit mode).")
     parser.add_argument("--title", default="Protected Text", help="HTML document title.")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for deterministic output.")
     parser.add_argument("--image-prob", type=float, default=0.35, help="Probability of image chunk replacement.")
@@ -950,7 +950,7 @@ def main():
             with open(input_path, "r", encoding="utf-8") as f:
                 text = f.read()
         reddit_text = build_reddit_text(text, config)
-        output_path = args.output if args.output != "obfuscated_output.html" else "reddit_obfuscated.txt"
+        output_path = args.output if args.output is not None else "reddit_obfuscated.txt"
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(reddit_text)
         print(f"Wrote Reddit-safe obfuscated text to: {output_path}")
@@ -969,7 +969,7 @@ def main():
 
     obfuscate_file(
         input_txt_path=args.input,
-        output_html_path=args.output,
+        output_html_path=args.output if args.output is not None else "obfuscated_output.html",
         title=args.title,
         config=config,
     )

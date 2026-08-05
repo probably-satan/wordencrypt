@@ -54,13 +54,13 @@ To generate obfuscated text safe for Reddit messages, posts, and DMs (no HTML or
 python text_obfuscator_html.py --reddit --input your_input.txt --output reddit_obfuscated.txt
 ```
 
-When `--output` is not changed from the default, the file is written to `reddit_obfuscated.txt`.
+When `--output` is not specified, the file is written to `reddit_obfuscated.txt`.
 
 The `--reddit` flag can be combined with `--enable-confusables`, `--confusable-prob`, `--zero-width-prob`, and `--seed`. Image-related options are ignored in Reddit mode.
 
 In the web app, click **Generate Reddit Text** below the main form to fetch Reddit-safe output. The result can be copied or downloaded from the Reddit Output panel that appears in the output column.
 
-
+## Web app
 
 Run the local web app:
 
