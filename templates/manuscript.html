@@ -258,6 +258,18 @@
         </div>
       </div>
 
+      <div class="field">
+        <label>Base Zero-Width Density <small style="font-weight:400;color:#888">(always-on invisible layer; ignored for zero_width strategy)</small></label>
+        <div class="density-row">
+          <input type="range" id="zw-density-slider"
+                 min="0" max="1" step="0.01" value="{{ form_values.zero_width_density }}"
+                 oninput="document.getElementById('zw-density-num').value=this.value">
+          <input type="number" name="zero_width_density" id="zw-density-num" min="0" max="1" step="0.01"
+                 value="{{ form_values.zero_width_density }}" style="width:5rem"
+                 oninput="document.getElementById('zw-density-slider').value=this.value">
+        </div>
+      </div>
+
       <button type="submit">🔒 Protect Manuscript</button>
     </form>
   </section>
