@@ -9,6 +9,7 @@ from wordencrypt.core import (
     HOMOGLYPHS_UPPER,
     ZERO_WIDTH_CHARS,
     compare_tokenization,
+    extract_watermark,
     insert_combining_marks,
     insert_homoglyphs,
     insert_zero_width,
@@ -169,6 +170,62 @@ def test_protect_markdown_blockquote_marker_preserved():
 def test_protect_markdown_invalid_strategy():
     with pytest.raises(ValueError):
         protect_markdown("hello", strategy="bad_strategy")
+
+
+def test_combined_density_one_modifies():
+    text = "This is plain prose text."
+    result = protect_markdown(text, strategy="combined", density=1.0)
+    assert result != text
+
+
+def test_combined_density_zero_unchanged():
+    text = "This is plain prose text."
+    result = protect_markdown(text, strategy="combined", density=0.0)
+    assert result == text
+
+
+def test_combined_all_zero_weights_unchanged():
+    text = "This is plain prose text."
+    result = protect_markdown(
+        text,
+        strategy="combined",
+        density=1.0,
+        weights={"zero_width": 0, "homoglyph": 0, "combining": 0},
+    )
+    assert result == text
+
+
+def test_combined_respects_all_protected_regions():
+    result = protect_markdown(SAMPLE_MD, strategy="combined", density=1.0)
+    assert '```python\ndef hello():\n    return "world"\n```' in result
+    assert "`code span`" in result
+    assert "[link text](https://example.com)" in result
+    assert "![alt text](https://example.com/img.png)" in result
+    assert "<https://example.com/autolink>" in result
+    assert result.startswith("# ")
+    assert "\n- " in result
+    assert "\n> " in result
+
+
+def test_watermark_round_trip():
+    result = protect_markdown("hello world", strategy="combined", density=0.4, watermark="hello")
+    assert extract_watermark(result) == "hello"
+
+
+def test_watermark_comment_not_perturbed_at_full_density():
+    text = "## Title\n\nProse words here for heavy perturbation."
+    result = protect_markdown(
+        text,
+        strategy="combined",
+        density=1.0,
+        watermark="exact-watermark-value",
+    )
+    assert "<!-- wm:" in result
+    assert extract_watermark(result) == "exact-watermark-value"
+
+
+def test_extract_watermark_missing_returns_none():
+    assert extract_watermark("No watermark here") is None
 
 
 # ---------------------------------------------------------------------------

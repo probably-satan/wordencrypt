@@ -203,23 +203,38 @@ def css_color_to_rgba(color_value: str, fallback_rgba: tuple) -> tuple:
         a = int(value[6:8], 16)
         return (r, g, b, a)
 
-    rgb_match = re.fullmatch(
-        r"rgba?\(([^,]+),([^,]+),([^,\)]+)(?:,([^\)]+))?\)", color
-    )
-    if rgb_match:
+    if color.startswith("rgb(") and color.endswith(")"):
+        channel_text = color[4:-1]
+        parts = [part.strip() for part in channel_text.split(",")]
+        if len(parts) != 3:
+            return fallback_rgba
         try:
-            r = int(float(rgb_match.group(1).strip()))
-            g = int(float(rgb_match.group(2).strip()))
-            b = int(float(rgb_match.group(3).strip()))
-            alpha_text = rgb_match.group(4)
-            if alpha_text is None:
-                a = 255
+            r = int(float(parts[0]))
+            g = int(float(parts[1]))
+            b = int(float(parts[2]))
+            return (
+                max(0, min(255, r)),
+                max(0, min(255, g)),
+                max(0, min(255, b)),
+                255,
+            )
+        except ValueError:
+            return fallback_rgba
+
+    if color.startswith("rgba(") and color.endswith(")"):
+        channel_text = color[5:-1]
+        parts = [part.strip() for part in channel_text.split(",")]
+        if len(parts) != 4:
+            return fallback_rgba
+        try:
+            r = int(float(parts[0]))
+            g = int(float(parts[1]))
+            b = int(float(parts[2]))
+            alpha_float = float(parts[3])
+            if alpha_float <= 1.0:
+                a = int(round(alpha_float * 255))
             else:
-                alpha_float = float(alpha_text.strip())
-                if alpha_float <= 1.0:
-                    a = int(round(alpha_float * 255))
-                else:
-                    a = int(round(alpha_float))
+                a = int(round(alpha_float))
             return (
                 max(0, min(255, r)),
                 max(0, min(255, g)),
@@ -353,13 +368,13 @@ def extract_visible_text_from_html(source_html: str) -> str:
     Extract visible text from an HTML document.
     """
     cleaned = re.sub(
-        r"<script[^>]*>.*?</script>",
+        r"<script\b[^>]*>.*?</script\b[^>]*>",
         "",
         source_html,
         flags=re.IGNORECASE | re.DOTALL,
     )
     cleaned = re.sub(
-        r"<style[^>]*>.*?</style>",
+        r"<style\b[^>]*>.*?</style\s*>",
         "",
         cleaned,
         flags=re.IGNORECASE | re.DOTALL,

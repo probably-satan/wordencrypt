@@ -1,14 +1,14 @@
-# WordEncrypt — Manuscript Protector
+# Active deploy entrypoint: `app.py` (Doc Defender). `legacy/` contains an older, separate obfuscator kept for reference.
+
+# Doc Defender
 
 A web application and library for authors to protect their Markdown manuscripts
 from being efficiently scraped and ingested into LLM training/inference pipelines,
 while keeping the text human-legible and Markdown-valid.
 
-**Live demo:** https://wordencrypt.onrender.com/
-
 ## What it does
 
-WordEncrypt applies invisible or near-invisible Unicode perturbations (zero-width
+Doc Defender applies invisible or near-invisible Unicode perturbations (zero-width
 characters, homoglyphs, or combining diacritical marks) to the prose sections of
 a Markdown document. This degrades tokenization efficiency for automated scrapers
 while keeping the text visually identical (or near-identical) to human readers.
@@ -17,13 +17,25 @@ Critically, it is **Markdown-aware**: code fences, inline code, links/images,
 autolinks, raw HTML, and leading structural markers (`#`, `>`, `-`, `1.`) are
 **never modified**, so formatting is fully preserved and links remain functional.
 
-### Three protection strategies
+### Protection strategies
 
 | Strategy | Effect | Disruption |
 |---|---|---|
 | `zero_width` | Inserts invisible zero-width characters after eligible letters | Mild |
 | `homoglyph` | Replaces eligible Latin letters with visually-identical Cyrillic/Greek lookalikes | Moderate |
 | `combining` | Appends stacked diacritical marks after eligible letters | Strong |
+| `combined` | Applies `zero_width` → `homoglyph` → `combining` over the same prose spans | High |
+
+### Optional watermark (`watermark`)
+
+When provided, the app appends a Base64 watermark comment:
+
+```md
+<!-- wm:<base64> -->
+```
+
+This is for legibility-preserving, low-effort authorship claims only. It is
+not cryptographically signed, not tamper-proof, and can be stripped easily.
 
 ### ⚠️ Caveat
 
@@ -87,8 +99,9 @@ curl -X POST https://your-app.onrender.com/api/protect \
   -H "Content-Type: application/json" \
   -d '{
     "text": "# My Article\n\nThis is my original prose.",
-    "strategy": "homoglyph",
-    "density": 0.25
+    "strategy": "combined",
+    "density": 0.2,
+    "watermark": "author@example.com|draft-7"
   }'
 ```
 
@@ -108,41 +121,12 @@ Response:
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `text` | string | required | Markdown source to protect (max 200,000 chars) |
-| `strategy` | string | `homoglyph` | One of `zero_width`, `homoglyph`, `combining` |
+| `strategy` | string | `homoglyph` | One of `zero_width`, `homoglyph`, `combining`, `combined` |
 | `density` | float | `0.25` | Fraction of eligible characters to perturb (0–1) |
+| `watermark` | string | unset | Optional text embedded as `<!-- wm:<base64> -->` |
 
 ---
 
-## Original HTML obfuscator
+## Legacy HTML obfuscator
 
-The original HTML-based obfuscator (generating image-fragment HTML output) is
-still available via `web_app.py`:
-
-```bash
-python web_app.py
-```
-
-See the original README sections below for its usage.
-
----
-
-## Legacy: Anti-Scrape Text Obfuscator (HTML)
-
-This project also converts plain text into HTML that remains readable for people
-while making naive text scraping harder.
-
-### Techniques used
-
-- Randomly replaces chunks inside words with inline PNG images.
-- Inserts random zero-width characters into visible text.
-- Adds noindex/noarchive style metadata.
-- Optionally includes a hidden anti-scraping directive block.
-
-### Quick run
-
-```bash
-python text_obfuscator_html.py
-```
-
-This reads `sample_input.txt` and writes `obfuscated_output.html`.
-
+The older HTML-based obfuscator has moved to `legacy/`. See `legacy/README.md`.

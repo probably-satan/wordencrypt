@@ -1,4 +1,5 @@
 import os
+from html import escape
 from flask import Flask, Response, render_template, request
 
 from text_obfuscator_html import (
@@ -11,7 +12,10 @@ from text_obfuscator_html import (
 )
 
 
-app = Flask(__name__)
+app = Flask(
+    __name__,
+    template_folder=os.path.join(os.path.dirname(__file__), "..", "templates"),
+)
 
 
 PROTECTION_PRESETS = {
@@ -200,7 +204,7 @@ def index():
 
 @app.post("/download")
 def download_output():
-    output_html = request.form.get("output_html", "")
+    output_html = escape(request.form.get("output_html", ""))
     title = request.form.get("title", "protected_text").strip() or "protected_text"
     safe_title = "".join(ch for ch in title if ch.isalnum() or ch in ("-", "_"))
     if not safe_title:
@@ -210,8 +214,9 @@ def download_output():
     return Response(
         output_html,
         headers={
-            "Content-Type": "text/html; charset=utf-8",
+            "Content-Type": "application/octet-stream",
             "Content-Disposition": f"attachment; filename={filename}",
+            "X-Content-Type-Options": "nosniff",
         },
     )
 
