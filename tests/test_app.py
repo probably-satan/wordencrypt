@@ -174,3 +174,50 @@ def test_index_post_valid(client):
     )
     assert resp.status_code == 200
     assert b"protected" in resp.data.lower()
+
+
+# ---------------------------------------------------------------------------
+# /api/protect — zero_width_density param
+# ---------------------------------------------------------------------------
+
+
+def test_api_protect_zero_width_density_accepted(client):
+    payload = {"text": SAMPLE_MD, "strategy": "homoglyph", "density": 0.5, "zero_width_density": 0.2}
+    resp = client.post(
+        "/api/protect",
+        data=json.dumps(payload),
+        content_type="application/json",
+    )
+    assert resp.status_code == 200
+
+
+def test_api_protect_zero_width_density_default_omitted(client):
+    """Omitting zero_width_density should default correctly (no error)."""
+    payload = {"text": SAMPLE_MD, "strategy": "homoglyph", "density": 0.5}
+    resp = client.post(
+        "/api/protect",
+        data=json.dumps(payload),
+        content_type="application/json",
+    )
+    assert resp.status_code == 200
+
+
+def test_api_protect_zero_width_density_clamped(client):
+    """zero_width_density out of [0,1] should be clamped, not error."""
+    payload = {"text": SAMPLE_MD, "strategy": "homoglyph", "density": 0.5, "zero_width_density": 5.0}
+    resp = client.post(
+        "/api/protect",
+        data=json.dumps(payload),
+        content_type="application/json",
+    )
+    assert resp.status_code == 200
+
+
+def test_api_protect_zero_width_density_negative_clamped(client):
+    payload = {"text": SAMPLE_MD, "strategy": "homoglyph", "density": 0.5, "zero_width_density": -1.0}
+    resp = client.post(
+        "/api/protect",
+        data=json.dumps(payload),
+        content_type="application/json",
+    )
+    assert resp.status_code == 200

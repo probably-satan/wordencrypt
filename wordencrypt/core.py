@@ -5,10 +5,17 @@ Core library for protecting Markdown manuscripts from clean scraping/
 tokenization by LLM training pipelines, while preserving formatting and
 human legibility.
 
-Three perturbation strategies:
+Four perturbation strategies:
   zero_width  - insert invisible chars after eligible letters
   homoglyph   - swap eligible Latin letters with Cyrillic/Greek lookalikes
   combining   - append combining diacritical marks after eligible letters
+  combined    - all three at once in a single left-to-right pass
+
+Zero-width insertion is always applied as a base layer for every strategy
+(controlled via the ``zero_width_density`` parameter, default 0.15).
+For ``strategy="zero_width"`` the base layer is suppressed to avoid
+double-insertion; the main ``density`` parameter drives zero-width
+intensity for that specific strategy.
 
 Markdown-aware segmentation: code fences, inline code, links/images,
 autolinks, raw HTML, and leading structural markers are never perturbed.
@@ -139,6 +146,37 @@ def _perturb_line(line: str, perturb_fn, density: float) -> str:
     return perturb_fn(line, density=density)
 
 
+def _perturb_line_with_base_zw(
+    line: str,
+    perturb_fn,
+    density: float,
+    zw_density: float,
+) -> str:
+    """Apply zero-width base layer + strategy in a single left-to-right pass.
+
+    For each alphabetic character:
+      1. Possibly insert a zero-width char (base layer, probability=zw_density).
+      2. Apply the strategy transformation (homoglyph swap or combining marks).
+    Protected leading markdown markers are preserved unchanged.
+    """
+    m = _LEADING_MARKER_RE.match(line)
+    marker = m.group(0) if m else ""
+    rest = line[m.end():] if m else line
+
+    # Single left-to-right pass over the prose text
+    out = []
+    for ch in rest:
+        # Base-layer zero-width insertion
+        if ch.isalpha() and random.random() < zw_density:
+            out.append(random.choice(ZERO_WIDTH_CHARS))
+        # Strategy transformation: for homoglyph the char itself changes;
+        # for combining we append marks after; fall back to identity.
+        transformed = perturb_fn(ch, density=density)
+        out.append(transformed)
+
+    return marker + "".join(out)
+
+
 # ---------------------------------------------------------------------------
 # Strategy implementations
 # ---------------------------------------------------------------------------
@@ -154,6 +192,14 @@ def insert_zero_width(text: str, density: float = 0.3) -> str:
     return "".join(out)
 
 
+def _zero_width_char(ch: str, density: float) -> str:
+    """Per-character version: return ch, possibly followed by a zero-width char."""
+    result = ch
+    if ch.isalpha() and random.random() < density:
+        result += random.choice(ZERO_WIDTH_CHARS)
+    return result
+
+
 def insert_homoglyphs(text: str, density: float = 0.3) -> str:
     """Replace eligible Latin letters with visually-identical lookalikes."""
     out = []
@@ -167,6 +213,15 @@ def insert_homoglyphs(text: str, density: float = 0.3) -> str:
     return "".join(out)
 
 
+def _homoglyph_char(ch: str, density: float) -> str:
+    """Per-character version: return homoglyph replacement or original char."""
+    if ch.isupper() and ch in HOMOGLYPHS_UPPER and random.random() < density:
+        return HOMOGLYPHS_UPPER[ch]
+    if ch.islower() and ch in HOMOGLYPHS and random.random() < density:
+        return HOMOGLYPHS[ch]
+    return ch
+
+
 def insert_combining_marks(text: str, density: float = 0.3) -> str:
     """Append 1-2 combining diacritical marks after eligible alphabetic chars."""
     out = []
@@ -177,6 +232,22 @@ def insert_combining_marks(text: str, density: float = 0.3) -> str:
             out.extend(random.choice(COMBINING_MARKS) for _ in range(n))
     return "".join(out)
 
+
+def _combining_char(ch: str, density: float) -> str:
+    """Per-character version: return ch with possible combining marks appended."""
+    result = ch
+    if ch.isalpha() and random.random() < density:
+        n = random.randint(1, 2)
+        result += "".join(random.choice(COMBINING_MARKS) for _ in range(n))
+    return result
+
+
+# Per-character strategy dispatch (used by single-pass helpers)
+_CHAR_FN = {
+    "zero_width": _zero_width_char,
+    "homoglyph": _homoglyph_char,
+    "combining": _combining_char,
+}
 
 CHAR_STRATEGIES = {
     "zero_width": insert_zero_width,
@@ -237,19 +308,39 @@ def protect_markdown_combined(
     density: float = 0.15,
     weights: dict[str, float] | None = None,
     watermark: str | None = None,
+    zero_width_density: float = 0.15,
 ) -> str:
-    """Apply zero_width -> homoglyph -> combining across prose spans."""
+    """Apply zero_width -> homoglyph -> combining in a single left-to-right pass.
+
+    The ``zero_width_density`` parameter controls the base-layer zero-width
+    insertion probability.  It is distinct from the per-strategy densities
+    derived from ``density``/``weights`` so callers can tune them independently.
+    """
     density = max(0.0, min(1.0, density))
+    zero_width_density = max(0.0, min(1.0, zero_width_density))
     strategy_weights = _normalize_combined_weights(density, weights)
 
     def _combined_perturb_line(line: str) -> str:
         m = _LEADING_MARKER_RE.match(line)
         marker = m.group(0) if m else ""
-        rest = line[m.end() :] if m else line
-        rest = insert_zero_width(rest, density=strategy_weights["zero_width"])
-        rest = insert_homoglyphs(rest, density=strategy_weights["homoglyph"])
-        rest = insert_combining_marks(rest, density=strategy_weights["combining"])
-        return marker + rest
+        rest = line[m.end():] if m else line
+
+        # Use zero_width_density as the shared base-layer zero-width density.
+        # strategy_weights["homoglyph"] and ["combining"] control their own layers.
+        hg_d = strategy_weights["homoglyph"]
+        cm_d = strategy_weights["combining"]
+
+        out = []
+        for ch in rest:
+            # Single left-to-right pass: base zero-width -> homoglyph -> combining
+            if ch.isalpha() and random.random() < zero_width_density:
+                out.append(random.choice(ZERO_WIDTH_CHARS))
+            ch = _homoglyph_char(ch, hg_d)
+            out.append(ch)
+            if ch.isalpha() and random.random() < cm_d:
+                n = random.randint(1, 2)
+                out.extend(random.choice(COMBINING_MARKS) for _ in range(n))
+        return marker + "".join(out)
 
     spans = _split_protected_spans(text)
     parts = []
@@ -271,16 +362,31 @@ def protect_markdown(
     density: float = 0.25,
     weights: dict[str, float] | None = None,
     watermark: str | None = None,
+    zero_width_density: float = 0.15,
 ) -> str:
     """Perturb only the prose portions of a Markdown document.
 
     Code fences, inline code, links/images, autolinks, raw HTML, and
     leading line markers (#, >, -, 1.) are left completely untouched.
 
+    Zero-width character insertion is always applied as a base layer for
+    every strategy (controlled by ``zero_width_density``, default 0.15).
+
+    **Special case — ``strategy="zero_width"``**: the base-layer zero-width
+    insertion is suppressed to avoid double-insertion.  The main ``density``
+    parameter exclusively controls zero-width intensity for this strategy;
+    ``zero_width_density`` is ignored when ``strategy="zero_width"``.
+
     Args:
-        text:     The Markdown source to protect.
-        strategy: One of "zero_width", "homoglyph", "combining", "combined".
-        density:  Fraction of eligible characters to perturb (0.0–1.0).
+        text:               The Markdown source to protect.
+        strategy:           One of "zero_width", "homoglyph", "combining",
+                            "combined".
+        density:            Fraction of eligible characters to perturb by the
+                            *selected* strategy (0.0–1.0).
+        zero_width_density: Fraction of eligible characters that receive the
+                            always-on base-layer zero-width insertion (0.0–1.0).
+                            Ignored when ``strategy="zero_width"`` to avoid
+                            double-insertion.  Default 0.15.
 
     Returns:
         The protected Markdown string.
@@ -290,6 +396,7 @@ def protect_markdown(
             f"Unknown strategy {strategy!r}. Choose from {list(STRATEGIES)}"
         )
     density = max(0.0, min(1.0, density))
+    zero_width_density = max(0.0, min(1.0, zero_width_density))
 
     if strategy == "combined":
         return protect_markdown_combined(
@@ -297,9 +404,33 @@ def protect_markdown(
             density=density,
             weights=weights,
             watermark=watermark,
+            zero_width_density=zero_width_density,
         )
 
-    perturb_fn = STRATEGIES[strategy]
+    if strategy == "zero_width":
+        # For zero_width strategy, only the main density drives insertion.
+        # The base layer is suppressed to avoid double-application.
+        perturb_fn = CHAR_STRATEGIES["zero_width"]
+        spans = _split_protected_spans(text)
+        parts = []
+        for is_protected, chunk in spans:
+            if is_protected:
+                parts.append(chunk)
+            else:
+                lines = chunk.split("\n")
+                parts.append(
+                    "\n".join(
+                        _perturb_line(line, perturb_fn, density) for line in lines
+                    )
+                )
+        protected = "".join(parts)
+        if watermark is not None:
+            protected = _append_watermark_comment(protected, watermark)
+        return protected
+
+    # For homoglyph/combining: single left-to-right pass applying both
+    # the base-layer zero-width insertion and the selected strategy.
+    char_fn = _CHAR_FN[strategy]
 
     spans = _split_protected_spans(text)
     parts = []
@@ -309,7 +440,12 @@ def protect_markdown(
         else:
             lines = chunk.split("\n")
             parts.append(
-                "\n".join(_perturb_line(line, perturb_fn, density) for line in lines)
+                "\n".join(
+                    _perturb_line_with_base_zw(
+                        line, char_fn, density, zero_width_density
+                    )
+                    for line in lines
+                )
             )
     protected = "".join(parts)
     if watermark is not None:
