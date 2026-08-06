@@ -7,6 +7,8 @@ import pytest
 from wordencrypt.core import (
     HOMOGLYPHS,
     HOMOGLYPHS_UPPER,
+    HOMOGLYPH_POOLS,
+    HOMOGLYPH_POOLS_UPPER,
     ZERO_WIDTH_CHARS,
     compare_tokenization,
     extract_watermark,
@@ -352,3 +354,91 @@ def test_protected_regions_unmodified_with_base_zw():
         assert result.startswith("# ")
         assert "\n- " in result
         assert "\n> " in result
+
+# ---------------------------------------------------------------------------
+# Expanded homoglyph pools
+# ---------------------------------------------------------------------------
+
+
+def test_homoglyph_pools_have_multiple_entries():
+    """Each letter in HOMOGLYPH_POOLS has more than one alternative."""
+    for letter, pool in HOMOGLYPH_POOLS.items():
+        assert len(pool) > 1, f"Pool for '{letter}' has only one entry"
+    for letter, pool in HOMOGLYPH_POOLS_UPPER.items():
+        assert len(pool) > 1, f"Pool for '{letter}' has only one entry"
+
+
+def test_homoglyph_pools_no_zero_width_or_combining():
+    """No pool entry should be a zero-width or combining-mark codepoint."""
+    zw_set = set(ZERO_WIDTH_CHARS)
+    for letter, pool in {**HOMOGLYPH_POOLS, **HOMOGLYPH_POOLS_UPPER}.items():
+        for ch in pool:
+            assert ch not in zw_set, f"Zero-width char in pool for '{letter}': U+{ord(ch):04X}"
+            assert unicodedata.combining(ch) == 0, (
+                f"Combining mark in pool for '{letter}': U+{ord(ch):04X}"
+            )
+
+
+def test_homoglyph_pools_all_single_codepoint():
+    """Every pool entry is exactly one codepoint (no multi-char precomposed strings)."""
+    for letter, pool in {**HOMOGLYPH_POOLS, **HOMOGLYPH_POOLS_UPPER}.items():
+        for ch in pool:
+            assert len(ch) == 1, f"Multi-codepoint entry in pool for '{letter}': {ch!r}"
+
+
+def test_homoglyph_pool_variety_lowercase():
+    """At density=1.0 over 200 identical lowercase letters, output shows multiple distinct variants."""
+    for letter in HOMOGLYPH_POOLS:
+        text = letter * 200
+        result = insert_homoglyphs(text, density=1.0)
+        distinct_subs = set(result) - {letter}
+        assert len(distinct_subs) > 1, (
+            f"Expected >1 distinct substitution for '{letter}', got {distinct_subs!r}"
+        )
+
+
+def test_homoglyph_pool_variety_uppercase():
+    """At density=1.0 over 200 identical uppercase letters, output shows multiple distinct variants."""
+    for letter in HOMOGLYPH_POOLS_UPPER:
+        text = letter * 200
+        result = insert_homoglyphs(text, density=1.0)
+        distinct_subs = set(result) - {letter}
+        assert len(distinct_subs) > 1, (
+            f"Expected >1 distinct substitution for '{letter}', got {distinct_subs!r}"
+        )
+
+
+def test_homoglyph_uppercase_uses_only_uppercase_pool():
+    """Uppercase letters only produce substitutions from HOMOGLYPH_POOLS_UPPER."""
+    for letter in HOMOGLYPH_POOLS_UPPER:
+        text = letter * 200
+        result = insert_homoglyphs(text, density=1.0)
+        allowed = set(HOMOGLYPH_POOLS_UPPER[letter]) | {letter}
+        for ch in result:
+            assert ch in allowed, (
+                f"Unexpected char U+{ord(ch):04X} for uppercase '{letter}'"
+            )
+
+
+def test_homoglyph_lowercase_uses_only_lowercase_pool():
+    """Lowercase letters only produce substitutions from HOMOGLYPH_POOLS."""
+    for letter in HOMOGLYPH_POOLS:
+        text = letter * 200
+        result = insert_homoglyphs(text, density=1.0)
+        allowed = set(HOMOGLYPH_POOLS[letter]) | {letter}
+        for ch in result:
+            assert ch in allowed, (
+                f"Unexpected char U+{ord(ch):04X} for lowercase '{letter}'"
+            )
+
+
+def test_homoglyph_pools_backward_compat_cyrillic_greek():
+    """The original Cyrillic/Greek homoglyph is still present in each pool."""
+    for letter, cg_char in HOMOGLYPHS.items():
+        assert cg_char in HOMOGLYPH_POOLS[letter], (
+            f"Cyrillic/Greek char for '{letter}' missing from expanded pool"
+        )
+    for letter, cg_char in HOMOGLYPHS_UPPER.items():
+        assert cg_char in HOMOGLYPH_POOLS_UPPER[letter], (
+            f"Cyrillic/Greek char for '{letter}' missing from expanded upper pool"
+        )

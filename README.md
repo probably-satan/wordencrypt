@@ -22,9 +22,30 @@ autolinks, raw HTML, and leading structural markers (`#`, `>`, `-`, `1.`) are
 | Strategy | Effect | Disruption |
 |---|---|---|
 | `zero_width` | Inserts invisible zero-width characters after eligible letters | Mild |
-| `homoglyph` | Replaces eligible Latin letters with visually-identical Cyrillic/Greek lookalikes | Moderate |
+| `homoglyph` | Replaces eligible Latin letters with lookalikes drawn from an expanded pool (see below) | Moderate |
 | `combining` | Appends stacked diacritical marks after eligible letters | Strong |
 | `combined` | Applies `zero_width` → `homoglyph` → `combining` over the same prose spans | High |
+
+### Expanded homoglyph pool
+
+The `homoglyph` (and `combined`) strategy draws from a rich, multi-source pool
+of visually-similar Unicode alternatives per eligible letter (a, c, e, i, j, o,
+p, s, x, y and their uppercase forms).  Each run randomly picks from the full
+pool so repeated letters in the same document show varied lookalikes rather than
+a uniform single substitution.
+
+Pool sources — all **plain Unicode text**, no HTML required:
+
+| Source | Examples |
+|---|---|
+| Cyrillic / Greek lookalikes | `а` `е` `о` `р` `с` (Cyrillic) |
+| Mathematical Alphanumeric Symbols (U+1D400–U+1D7FF) | bold `𝐚`, italic `𝑎`, sans-serif `𝖺`, sans-serif bold `𝗮`, monospace `𝚊`, Fraktur `𝔞`, … |
+| Fullwidth Latin Forms (U+FF00–U+FFEF) | `ａ` `ｅ` `ｏ` `ｐ` `ｃ` `ｘ` |
+
+Because these are all standalone Unicode codepoints (not HTML entities, not
+images, not base64 data), the output is **safe to copy-paste anywhere** —
+Reddit, plain-text blogs, email, or any platform with zero HTML/Markdown image
+support — and will display correctly wherever Unicode fonts are available.
 
 ### Optional watermark (`watermark`)
 

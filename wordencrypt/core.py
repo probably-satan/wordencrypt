@@ -64,6 +64,120 @@ HOMOGLYPHS_UPPER = {
     "Y": "\u0423",  # Cyrillic У
 }
 
+# ---------------------------------------------------------------------------
+# Expanded homoglyph pools
+# ---------------------------------------------------------------------------
+# HOMOGLYPH_POOLS maps each eligible *lowercase* Latin letter to a list of
+# visually-similar single-codepoint alternatives drawn from three sources:
+#   1. Cyrillic / Greek block (same characters as HOMOGLYPHS above)
+#   2. Mathematical Alphanumeric Symbols block (U+1D400–U+1D7FF):
+#      bold, italic, bold-italic, sans-serif, sans-serif bold,
+#      sans-serif italic, sans-serif bold-italic, monospace, and Fraktur
+#      variants.  Several code points in the italic/fraktur/script ranges
+#      are unassigned and redirect to legacy characters; those edge cases
+#      are handled explicitly (e.g. italic 'h' → U+210E PLANCK CONSTANT).
+#   3. Fullwidth Latin Forms (U+FF01–U+FF5E):
+#      fullwidth small letters a–z at U+FF41 + offset.
+#
+# HOMOGLYPH_POOLS_UPPER is the parallel structure for uppercase letters.
+# Keys are always the ASCII base letter (lowercase in POOLS, uppercase in
+# POOLS_UPPER).  insert_homoglyphs picks uniformly at random from the pool.
+#
+# All entries are standalone single codepoints with no combining/zero-width
+# properties — safe to paste on any plain-text platform (Reddit, blogs, etc.)
+# without requiring HTML support.
+
+import unicodedata as _unicodedata
+
+# Fraktur lowercase has holes at h → U+210C, i → U+2111
+_FRAKTUR_LOWER_EX = {"h": "\u210c", "i": "\u2111"}
+_ITALIC_LOWER_EX = {"h": "\u210e"}
+
+# Fraktur uppercase has holes: C→U+212D, H→U+210C, I→U+2111, R→U+211C, Z→U+2128
+_FRAKTUR_UPPER_EX = {
+    "C": "\u212d",
+    "H": "\u210c",
+    "I": "\u2111",
+    "R": "\u211c",
+    "Z": "\u2128",
+}
+
+_MATH_LOWER_BASES = [
+    (0x1D41A, None),               # bold
+    (0x1D44E, _ITALIC_LOWER_EX),   # italic (h exception)
+    (0x1D482, None),               # bold italic
+    (0x1D5BA, None),               # sans-serif
+    (0x1D5EE, None),               # sans-serif bold
+    (0x1D622, None),               # sans-serif italic
+    (0x1D656, None),               # sans-serif bold italic
+    (0x1D68A, None),               # monospace
+]
+
+_MATH_UPPER_BASES = [
+    0x1D400,  # bold
+    0x1D434,  # italic
+    0x1D468,  # bold italic
+    0x1D5A0,  # sans-serif
+    0x1D5D4,  # sans-serif bold
+    0x1D608,  # sans-serif italic
+    0x1D63C,  # sans-serif bold italic
+    0x1D670,  # monospace
+]
+
+
+def _build_lower_pool(letter: str, cyrillic_greek: str) -> list:
+    """Return all visually-similar alternatives for a lowercase Latin letter."""
+    idx = ord(letter) - ord("a")
+    pool = [cyrillic_greek]
+    for base, exc in _MATH_LOWER_BASES:
+        if exc and letter in exc:
+            pool.append(exc[letter])
+        else:
+            c = chr(base + idx)
+            if _unicodedata.name(c, ""):
+                pool.append(c)
+    # Fraktur
+    if letter in _FRAKTUR_LOWER_EX:
+        pool.append(_FRAKTUR_LOWER_EX[letter])
+    else:
+        c = chr(0x1D51E + idx)
+        if _unicodedata.name(c, ""):
+            pool.append(c)
+    # Fullwidth
+    pool.append(chr(0xFF41 + idx))
+    return pool
+
+
+def _build_upper_pool(letter: str, cyrillic_greek: str) -> list:
+    """Return all visually-similar alternatives for an uppercase Latin letter."""
+    idx = ord(letter) - ord("A")
+    pool = [cyrillic_greek]
+    for base in _MATH_UPPER_BASES:
+        c = chr(base + idx)
+        if _unicodedata.name(c, ""):
+            pool.append(c)
+    # Fraktur
+    if letter in _FRAKTUR_UPPER_EX:
+        pool.append(_FRAKTUR_UPPER_EX[letter])
+    else:
+        c = chr(0x1D504 + idx)
+        if _unicodedata.name(c, ""):
+            pool.append(c)
+    # Fullwidth
+    pool.append(chr(0xFF21 + idx))
+    return pool
+
+
+HOMOGLYPH_POOLS: dict = {
+    lc: _build_lower_pool(lc, cg)
+    for lc, cg in HOMOGLYPHS.items()
+}
+
+HOMOGLYPH_POOLS_UPPER: dict = {
+    uc: _build_upper_pool(uc, cg)
+    for uc, cg in HOMOGLYPHS_UPPER.items()
+}
+
 COMBINING_MARKS = [
     "\u0301",  # combining acute accent
     "\u0300",  # combining grave accent
@@ -201,13 +315,18 @@ def _zero_width_char(ch: str, density: float) -> str:
 
 
 def insert_homoglyphs(text: str, density: float = 0.3) -> str:
-    """Replace eligible Latin letters with visually-identical lookalikes."""
+    """Replace eligible Latin letters with visually-identical lookalikes.
+
+    Picks uniformly at random from HOMOGLYPH_POOLS / HOMOGLYPH_POOLS_UPPER
+    so repeated letters in the same document show varied lookalikes across
+    the Cyrillic/Greek, Mathematical Alphanumeric, and Fullwidth pools.
+    """
     out = []
     for ch in text:
-        if ch.isupper() and ch in HOMOGLYPHS_UPPER and random.random() < density:
-            out.append(HOMOGLYPHS_UPPER[ch])
-        elif ch.islower() and ch in HOMOGLYPHS and random.random() < density:
-            out.append(HOMOGLYPHS[ch])
+        if ch.isupper() and ch in HOMOGLYPH_POOLS_UPPER and random.random() < density:
+            out.append(random.choice(HOMOGLYPH_POOLS_UPPER[ch]))
+        elif ch.islower() and ch in HOMOGLYPH_POOLS and random.random() < density:
+            out.append(random.choice(HOMOGLYPH_POOLS[ch]))
         else:
             out.append(ch)
     return "".join(out)
@@ -215,10 +334,10 @@ def insert_homoglyphs(text: str, density: float = 0.3) -> str:
 
 def _homoglyph_char(ch: str, density: float) -> str:
     """Per-character version: return homoglyph replacement or original char."""
-    if ch.isupper() and ch in HOMOGLYPHS_UPPER and random.random() < density:
-        return HOMOGLYPHS_UPPER[ch]
-    if ch.islower() and ch in HOMOGLYPHS and random.random() < density:
-        return HOMOGLYPHS[ch]
+    if ch.isupper() and ch in HOMOGLYPH_POOLS_UPPER and random.random() < density:
+        return random.choice(HOMOGLYPH_POOLS_UPPER[ch])
+    if ch.islower() and ch in HOMOGLYPH_POOLS and random.random() < density:
+        return random.choice(HOMOGLYPH_POOLS[ch])
     return ch
 
 
