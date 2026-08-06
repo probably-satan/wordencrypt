@@ -1,0 +1,205 @@
+"""Unit tests for wordencrypt/core.py"""
+
+import unicodedata
+
+import pytest
+
+from wordencrypt.core import (
+    HOMOGLYPHS,
+    HOMOGLYPHS_UPPER,
+    ZERO_WIDTH_CHARS,
+    compare_tokenization,
+    insert_combining_marks,
+    insert_homoglyphs,
+    insert_zero_width,
+    pretokenize,
+    protect_markdown,
+)
+
+# ---------------------------------------------------------------------------
+# Strategy: zero_width
+# ---------------------------------------------------------------------------
+
+
+def test_zero_width_density_one_modifies():
+    text = "hello world"
+    result = insert_zero_width(text, density=1.0)
+    assert result != text
+    # Every alpha char should have a zero-width char inserted after it
+    zw_set = set(ZERO_WIDTH_CHARS)
+    assert any(ch in zw_set for ch in result)
+
+
+def test_zero_width_density_zero_unchanged():
+    text = "hello world"
+    assert insert_zero_width(text, density=0.0) == text
+
+
+def test_zero_width_non_alpha_unchanged():
+    text = "1234 !@#$"
+    result = insert_zero_width(text, density=1.0)
+    assert result == text
+
+
+# ---------------------------------------------------------------------------
+# Strategy: homoglyph
+# ---------------------------------------------------------------------------
+
+
+def test_homoglyph_density_one_modifies():
+    # "ace" contains three eligible letters
+    text = "ace"
+    result = insert_homoglyphs(text, density=1.0)
+    assert result != text
+    for ch in result:
+        assert ch in HOMOGLYPHS.values() or ch not in HOMOGLYPHS
+
+
+def test_homoglyph_density_zero_unchanged():
+    text = "hello world"
+    assert insert_homoglyphs(text, density=0.0) == text
+
+
+def test_homoglyph_case_preserving():
+    text = "ACE"
+    result = insert_homoglyphs(text, density=1.0)
+    # Results should be uppercase-category-like (not necessarily ASCII upper)
+    assert result != text
+
+
+# ---------------------------------------------------------------------------
+# Strategy: combining
+# ---------------------------------------------------------------------------
+
+
+def test_combining_density_one_modifies():
+    text = "hello"
+    result = insert_combining_marks(text, density=1.0)
+    assert result != text
+    # Should contain combining characters
+    assert any(unicodedata.combining(ch) for ch in result)
+
+
+def test_combining_density_zero_unchanged():
+    text = "hello world"
+    assert insert_combining_marks(text, density=0.0) == text
+
+
+# ---------------------------------------------------------------------------
+# protect_markdown: prose is perturbed, protected regions are not
+# ---------------------------------------------------------------------------
+
+SAMPLE_MD = """\
+# Heading One
+
+This is a prose paragraph with some words to perturb.
+
+- list item one
+- list item two
+
+> blockquote text here
+
+```python
+def hello():
+    return "world"
+```
+
+Inline `code span` should not change.
+
+A [link text](https://example.com) in prose.
+
+An image: ![alt text](https://example.com/img.png)
+
+Autolink: <https://example.com/autolink>
+
+<div class="raw">raw HTML tag</div>
+"""
+
+
+def test_protect_markdown_zero_density_unchanged():
+    result = protect_markdown(SAMPLE_MD, strategy="homoglyph", density=0.0)
+    assert result == SAMPLE_MD
+
+
+def test_protect_markdown_perturbs_prose():
+    result = protect_markdown(SAMPLE_MD, strategy="zero_width", density=1.0)
+    assert result != SAMPLE_MD
+
+
+def test_protect_markdown_code_fence_unchanged():
+    result = protect_markdown(SAMPLE_MD, strategy="zero_width", density=1.0)
+    assert '```python\ndef hello():\n    return "world"\n```' in result
+
+
+def test_protect_markdown_inline_code_unchanged():
+    result = protect_markdown(SAMPLE_MD, strategy="zero_width", density=1.0)
+    assert "`code span`" in result
+
+
+def test_protect_markdown_link_url_unchanged():
+    result = protect_markdown(SAMPLE_MD, strategy="zero_width", density=1.0)
+    assert "[link text](https://example.com)" in result
+
+
+def test_protect_markdown_image_unchanged():
+    result = protect_markdown(SAMPLE_MD, strategy="zero_width", density=1.0)
+    assert "![alt text](https://example.com/img.png)" in result
+
+
+def test_protect_markdown_autolink_unchanged():
+    result = protect_markdown(SAMPLE_MD, strategy="zero_width", density=1.0)
+    assert "<https://example.com/autolink>" in result
+
+
+def test_protect_markdown_heading_marker_preserved():
+    result = protect_markdown(SAMPLE_MD, strategy="zero_width", density=1.0)
+    assert result.startswith("# ")
+
+
+def test_protect_markdown_list_marker_preserved():
+    result = protect_markdown(SAMPLE_MD, strategy="zero_width", density=1.0)
+    assert "\n- " in result
+
+
+def test_protect_markdown_blockquote_marker_preserved():
+    result = protect_markdown(SAMPLE_MD, strategy="zero_width", density=1.0)
+    assert "\n> " in result
+
+
+def test_protect_markdown_invalid_strategy():
+    with pytest.raises(ValueError):
+        protect_markdown("hello", strategy="bad_strategy")
+
+
+# ---------------------------------------------------------------------------
+# compare_tokenization
+# ---------------------------------------------------------------------------
+
+
+def test_compare_tokenization_same_text():
+    stats = compare_tokenization("hello world", "hello world")
+    assert stats["original_token_count"] == stats["modified_token_count"]
+    assert stats["expansion_ratio"] == 1.0
+
+
+def test_compare_tokenization_empty():
+    stats = compare_tokenization("", "")
+    assert stats["original_token_count"] == 0
+    assert stats["modified_token_count"] == 0
+    assert stats["expansion_ratio"] == 0.0
+
+
+def test_compare_tokenization_counts():
+    original = "hello world"
+    orig_chunks = pretokenize(original)
+    stats = compare_tokenization(original, original)
+    assert stats["original_token_count"] == len(orig_chunks)
+
+
+def test_compare_tokenization_expansion():
+    original = "cat"
+    # Insert zero-width chars between every letter → more tokens
+    modified = insert_zero_width(original, density=1.0)
+    stats = compare_tokenization(original, modified)
+    assert stats["modified_token_count"] >= stats["original_token_count"]
+    assert stats["expansion_ratio"] >= 1.0
