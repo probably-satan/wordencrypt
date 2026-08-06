@@ -5,6 +5,7 @@ import json
 import pytest
 
 from app import app as flask_app
+from wordencrypt.core import extract_watermark
 
 
 @pytest.fixture
@@ -43,7 +44,7 @@ def test_healthz(client):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("strategy", ["zero_width", "homoglyph", "combining"])
+@pytest.mark.parametrize("strategy", ["zero_width", "homoglyph", "combining", "combined"])
 def test_api_protect_valid(client, strategy):
     payload = {"text": SAMPLE_MD, "strategy": strategy, "density": 0.5}
     resp = client.post(
@@ -80,6 +81,23 @@ def test_api_protect_density_clamped(client):
         content_type="application/json",
     )
     assert resp.status_code == 200
+
+
+def test_api_protect_accepts_watermark(client):
+    payload = {
+        "text": SAMPLE_MD,
+        "strategy": "combined",
+        "density": 0.5,
+        "watermark": "hello",
+    }
+    resp = client.post(
+        "/api/protect",
+        data=json.dumps(payload),
+        content_type="application/json",
+    )
+    assert resp.status_code == 200
+    data = json.loads(resp.data)
+    assert extract_watermark(data["protected_text"]) == "hello"
 
 
 # ---------------------------------------------------------------------------
@@ -146,7 +164,7 @@ def test_api_protect_missing_text(client):
 def test_index_get(client):
     resp = client.get("/")
     assert resp.status_code == 200
-    assert b"WordEncrypt" in resp.data
+    assert b"Doc Defender" in resp.data
 
 
 def test_index_post_valid(client):

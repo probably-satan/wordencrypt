@@ -76,8 +76,16 @@ def api_protect():
     except (TypeError, ValueError):
         return jsonify({"error": "density must be a number between 0 and 1"}), 400
     density = max(0.0, min(1.0, density))
+    watermark = data.get("watermark")
+    if watermark is not None and not isinstance(watermark, str):
+        return jsonify({"error": "watermark must be a string when provided"}), 400
 
-    protected = protect_markdown(text, strategy=strategy, density=density)
+    protected = protect_markdown(
+        text,
+        strategy=strategy,
+        density=density,
+        watermark=watermark,
+    )
     stats = compare_tokenization(text, protected)
 
     return (
@@ -106,6 +114,7 @@ def index():
         "text": "",
         "strategy": "homoglyph",
         "density": "0.25",
+        "watermark": "",
     }
 
     if request.method == "POST":
@@ -122,10 +131,12 @@ def index():
 
         strategy = request.form.get("strategy", "homoglyph")
         density_raw = request.form.get("density", "0.25")
+        watermark = request.form.get("watermark", "")
 
         form_values["text"] = text
         form_values["strategy"] = strategy
         form_values["density"] = density_raw
+        form_values["watermark"] = watermark
 
         if not error:
             if not text.strip():
@@ -147,7 +158,12 @@ def index():
                     density = 0.25
                 density = max(0.0, min(1.0, density))
 
-                protected = protect_markdown(text, strategy=strategy, density=density)
+                protected = protect_markdown(
+                    text,
+                    strategy=strategy,
+                    density=density,
+                    watermark=watermark or None,
+                )
                 stats = compare_tokenization(text, protected)
                 result = {
                     "protected_text": protected,

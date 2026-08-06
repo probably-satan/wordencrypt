@@ -14,6 +14,7 @@ Markdown-aware segmentation: code fences, inline code, links/images,
 autolinks, raw HTML, and leading structural markers are never perturbed.
 """
 
+import base64
 import random
 import re
 
@@ -79,12 +80,14 @@ _INLINE_CODE_RE = re.compile(r"`[^`\n]+`")
 _LINK_OR_IMAGE_RE = re.compile(r"!?\[[^\]]*\]\([^)]*\)")
 _AUTOLINK_RE = re.compile(r"<https?://[^>]+>")
 _HTML_TAG_RE = re.compile(r"<[^>\n]+>")
+_HTML_COMMENT_RE = re.compile(r"<!--[\s\S]*?-->")
 
 _PROTECTED_PATTERNS = [
     _FENCE_RE,
     _INLINE_CODE_RE,
     _LINK_OR_IMAGE_RE,
     _AUTOLINK_RE,
+    _HTML_COMMENT_RE,
     _HTML_TAG_RE,
 ]
 
@@ -175,7 +178,7 @@ def insert_combining_marks(text: str, density: float = 0.3) -> str:
     return "".join(out)
 
 
-STRATEGIES = {
+CHAR_STRATEGIES = {
     "zero_width": insert_zero_width,
     "homoglyph": insert_homoglyphs,
     "combining": insert_combining_marks,
@@ -186,7 +189,89 @@ STRATEGIES = {
 # ---------------------------------------------------------------------------
 
 
-def protect_markdown(text: str, strategy: str = "homoglyph", density: float = 0.25) -> str:
+def _append_watermark_comment(text: str, watermark: str) -> str:
+    encoded = base64.b64encode(watermark.encode("utf-8")).decode("ascii")
+    comment = f"<!-- wm:{encoded} -->"
+    if not text:
+        return comment
+    return f"{text}\n\n{comment}"
+
+
+def extract_watermark(text: str) -> str | None:
+    """Return decoded watermark from `<!-- wm:<base64> -->`, if present/valid."""
+    m = re.search(r"<!--\s*wm:([A-Za-z0-9+/=]+)\s*-->", text)
+    if not m:
+        return None
+    encoded = m.group(1)
+    try:
+        decoded = base64.b64decode(encoded, validate=True)
+        return decoded.decode("utf-8")
+    except (ValueError, UnicodeDecodeError):
+        return None
+
+
+def _normalize_combined_weights(
+    density: float, weights: dict[str, float] | None
+) -> dict[str, float]:
+    if weights is not None:
+        normalized = {}
+        for name in ("zero_width", "homoglyph", "combining"):
+            try:
+                value = float(weights.get(name, 0.0))
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"Invalid weight for {name!r}") from exc
+            normalized[name] = max(0.0, min(1.0, value))
+        return normalized
+
+    # Defaults intentionally reduce homoglyph/combining intensity because
+    # stacking all three strategies at full density can become too noisy.
+    return {
+        "zero_width": density,
+        "homoglyph": density * 0.6,
+        "combining": density * 0.5,
+    }
+
+
+def protect_markdown_combined(
+    text: str,
+    density: float = 0.15,
+    weights: dict[str, float] | None = None,
+    watermark: str | None = None,
+) -> str:
+    """Apply zero_width -> homoglyph -> combining across prose spans."""
+    density = max(0.0, min(1.0, density))
+    strategy_weights = _normalize_combined_weights(density, weights)
+
+    def _combined_perturb_line(line: str) -> str:
+        m = _LEADING_MARKER_RE.match(line)
+        marker = m.group(0) if m else ""
+        rest = line[m.end() :] if m else line
+        rest = insert_zero_width(rest, density=strategy_weights["zero_width"])
+        rest = insert_homoglyphs(rest, density=strategy_weights["homoglyph"])
+        rest = insert_combining_marks(rest, density=strategy_weights["combining"])
+        return marker + rest
+
+    spans = _split_protected_spans(text)
+    parts = []
+    for is_protected, chunk in spans:
+        if is_protected:
+            parts.append(chunk)
+        else:
+            lines = chunk.split("\n")
+            parts.append("\n".join(_combined_perturb_line(line) for line in lines))
+    protected = "".join(parts)
+    if watermark is not None:
+        protected = _append_watermark_comment(protected, watermark)
+    return protected
+
+
+def protect_markdown(
+    text: str,
+    strategy: str = "homoglyph",
+    density: float = 0.25,
+    weights: dict[str, float] | None = None,
+    watermark: str | None = None,
+) -> str:
     """Perturb only the prose portions of a Markdown document.
 
     Code fences, inline code, links/images, autolinks, raw HTML, and
@@ -194,7 +279,7 @@ def protect_markdown(text: str, strategy: str = "homoglyph", density: float = 0.
 
     Args:
         text:     The Markdown source to protect.
-        strategy: One of "zero_width", "homoglyph", "combining".
+        strategy: One of "zero_width", "homoglyph", "combining", "combined".
         density:  Fraction of eligible characters to perturb (0.0–1.0).
 
     Returns:
@@ -205,6 +290,15 @@ def protect_markdown(text: str, strategy: str = "homoglyph", density: float = 0.
             f"Unknown strategy {strategy!r}. Choose from {list(STRATEGIES)}"
         )
     density = max(0.0, min(1.0, density))
+
+    if strategy == "combined":
+        return protect_markdown_combined(
+            text,
+            density=density,
+            weights=weights,
+            watermark=watermark,
+        )
+
     perturb_fn = STRATEGIES[strategy]
 
     spans = _split_protected_spans(text)
@@ -217,7 +311,16 @@ def protect_markdown(text: str, strategy: str = "homoglyph", density: float = 0.
             parts.append(
                 "\n".join(_perturb_line(line, perturb_fn, density) for line in lines)
             )
-    return "".join(parts)
+    protected = "".join(parts)
+    if watermark is not None:
+        protected = _append_watermark_comment(protected, watermark)
+    return protected
+
+
+STRATEGIES = {
+    **CHAR_STRATEGIES,
+    "combined": protect_markdown_combined,
+}
 
 
 # ---------------------------------------------------------------------------
