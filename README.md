@@ -1,23 +1,144 @@
-# Anti-Scrape Text Obfuscator (HTML)
+# WordEncrypt — Manuscript Protector
 
-Try it here: https://anti-scrape-text-obfuscator.onrender.com/
+A web application and library for authors to protect their Markdown manuscripts
+from being efficiently scraped and ingested into LLM training/inference pipelines,
+while keeping the text human-legible and Markdown-valid.
 
-This project converts plain text into HTML that remains readable for people while making naive text scraping harder.
+**Live demo:** https://wordencrypt.onrender.com/
 
-## Techniques used
+## What it does
+
+WordEncrypt applies invisible or near-invisible Unicode perturbations (zero-width
+characters, homoglyphs, or combining diacritical marks) to the prose sections of
+a Markdown document. This degrades tokenization efficiency for automated scrapers
+while keeping the text visually identical (or near-identical) to human readers.
+
+Critically, it is **Markdown-aware**: code fences, inline code, links/images,
+autolinks, raw HTML, and leading structural markers (`#`, `>`, `-`, `1.`) are
+**never modified**, so formatting is fully preserved and links remain functional.
+
+### Three protection strategies
+
+| Strategy | Effect | Disruption |
+|---|---|---|
+| `zero_width` | Inserts invisible zero-width characters after eligible letters | Mild |
+| `homoglyph` | Replaces eligible Latin letters with visually-identical Cyrillic/Greek lookalikes | Moderate |
+| `combining` | Appends stacked diacritical marks after eligible letters | Strong |
+
+### ⚠️ Caveat
+
+This tool adds friction for automated scrapers — it is **not a guarantee**. A
+scraper applying Unicode NFKC normalization or stripping zero-width/combining marks
+before tokenizing can defeat it. Use it as one layer alongside ToS, copyright
+notices, rate-limiting, and robots.txt disallow rules.
+
+---
+
+## Local development
+
+### Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### Run the web app
+
+```bash
+python app.py
+```
+
+Then open http://127.0.0.1:5000 in your browser.
+
+### Run tests
+
+```bash
+python -m pytest tests/ -v
+```
+
+---
+
+## Deploy to Render
+
+1. Fork or clone this repo to your GitHub account.
+2. Sign in at [render.com](https://render.com) and click **New → Blueprint**.
+3. Connect your GitHub repo — Render auto-detects `render.yaml` and sets up the
+   service with `gunicorn app:app` as the start command.
+4. Click **Apply** and your app will be live in ~2 minutes.
+
+The app reads the port from the `PORT` environment variable injected by Render and
+binds to `0.0.0.0` automatically.
+
+---
+
+## API
+
+### Health check
+
+```bash
+curl https://your-app.onrender.com/healthz
+# → {"status": "ok"}
+```
+
+### Protect a manuscript
+
+```bash
+curl -X POST https://your-app.onrender.com/api/protect \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "# My Article\n\nThis is my original prose.",
+    "strategy": "homoglyph",
+    "density": 0.25
+  }'
+```
+
+Response:
+
+```json
+{
+  "protected_text": "# My Article\n\nThis is my original prose.",
+  "original_token_count": 12,
+  "modified_token_count": 14,
+  "expansion_ratio": 1.1667
+}
+```
+
+**Request fields:**
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `text` | string | required | Markdown source to protect (max 200,000 chars) |
+| `strategy` | string | `homoglyph` | One of `zero_width`, `homoglyph`, `combining` |
+| `density` | float | `0.25` | Fraction of eligible characters to perturb (0–1) |
+
+---
+
+## Original HTML obfuscator
+
+The original HTML-based obfuscator (generating image-fragment HTML output) is
+still available via `web_app.py`:
+
+```bash
+python web_app.py
+```
+
+See the original README sections below for its usage.
+
+---
+
+## Legacy: Anti-Scrape Text Obfuscator (HTML)
+
+This project also converts plain text into HTML that remains readable for people
+while making naive text scraping harder.
+
+### Techniques used
 
 - Randomly replaces chunks inside words with inline PNG images.
 - Inserts random zero-width characters into visible text.
 - Adds noindex/noarchive style metadata.
 - Optionally includes a hidden anti-scraping directive block.
 
-## Setup
-
-```bash
-pip install -r requirements.txt
-```
-
-## Quick run
+### Quick run
 
 ```bash
 python text_obfuscator_html.py
@@ -25,60 +146,3 @@ python text_obfuscator_html.py
 
 This reads `sample_input.txt` and writes `obfuscated_output.html`.
 
-## Use your own file
-
-```bash
-python text_obfuscator_html.py --input your_input.txt --output protected.html --title "Protected Text"
-```
-
-## Useful options
-
-- `--seed 42` for deterministic output.
-- `--image-prob 0.35` controls how often chunks become images.
-- `--zero-width-prob 0.22` controls zero-width insertion rate.
-- `--enable-confusables` enables low-rate Cyrillic/Unicode lookalike substitutions.
-- `--confusable-prob 0.05` controls confusable substitution rate.
-- `--enable-image-protection` enables image hardening on base64 syllable PNGs.
-- `--disable-protection-ensemble` disables random ensemble stacking and applies all layers deterministically.
-- `--noise-strength 0.08` controls random pixel noise.
-- `--gradient-strength 0.07` controls gradient perturbation.
-- `--frequency-strength 0.06` controls sinusoidal frequency perturbation.
-- `--texture-strength 0.07` controls texture overlays.
-- `--no-hidden-directive` disables the hidden directive block.
-
-## Reddit / plain-text mode
-
-To generate obfuscated text safe for Reddit messages, posts, and DMs (no HTML or image fragments — only zero-width characters and Unicode lookalikes):
-
-```bash
-python text_obfuscator_html.py --reddit --input your_input.txt --output reddit_obfuscated.txt
-```
-
-When `--output` is not specified, the file is written to `reddit_obfuscated.txt`.
-
-The `--reddit` flag can be combined with `--enable-confusables`, `--confusable-prob`, `--zero-width-prob`, and `--seed`. Image-related options are ignored in Reddit mode.
-
-In the web app, click **Generate Reddit Text** below the main form to fetch Reddit-safe output. The result can be copied or downloaded from the Reddit Output panel that appears in the output column.
-
-## Web app
-
-Run the local web app:
-
-```bash
-python web_app.py
-```
-
-Then open:
-
-```text
-http://127.0.0.1:5000
-```
-
-In the UI, users can:
-
-- Paste input text.
-- Set display typography (for example `12pt` and a font family).
-- Optionally enable Cyrillic/Unicode lookalike substitutions.
-- Optionally enable image protection layers (ensemble, frequency, gradient, texture, noise).
-- Generate obfuscated HTML output.
-- Copy or download the generated HTML file.
